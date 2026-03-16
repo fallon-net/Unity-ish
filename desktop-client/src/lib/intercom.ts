@@ -394,3 +394,29 @@ export async function loadClientConfig(): Promise<ClientConfig> {
 
     return response.json() as Promise<ClientConfig>;
 }
+
+interface PreferencesData {
+    inputDeviceId?: string;
+    outputDeviceId?: string;
+}
+
+export function loadPreferences(): PreferencesData {
+    try {
+        const stored = localStorage.getItem("intercom-preferences");
+        if (!stored) {
+            return {};
+        }
+        return JSON.parse(stored) as PreferencesData;
+    } catch (error) {
+        console.error("Failed to load preferences:", error);
+        return {};
+    }
+}
+
+export function savePreferences(data: PreferencesData): void {
+    try {
+        localStorage.setItem("intercom-preferences", JSON.stringify(data));
+    } catch (error) {
+        console.error("Failed to save preferences:", error);
+    }
+}

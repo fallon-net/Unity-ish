@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { IntercomClient, loadClientConfig, type ChannelId, type HealthSnapshot } from "./lib/intercom";
+import { IntercomClient, loadClientConfig, loadPreferences, savePreferences, type ChannelId, type HealthSnapshot } from "./lib/intercom";
 
 const channels: ChannelId[] = ["PL-A", "PL-B"];
 
@@ -40,12 +40,20 @@ export function App() {
                 return;
             }
 
-            setDevices({
-                inputId: inputDevices[0]?.deviceId ?? "",
-                outputId: outputDevices[0]?.deviceId ?? "",
-                inputDevices,
-                outputDevices
-            });
+                        const prefs = loadPreferences();
+                        const inputId = prefs.inputDeviceId && inputDevices.some(d => d.deviceId === prefs.inputDeviceId) 
+                            ? prefs.inputDeviceId 
+                            : inputDevices[0]?.deviceId ?? "";
+                        const outputId = prefs.outputDeviceId && outputDevices.some(d => d.deviceId === prefs.outputDeviceId)
+                            ? prefs.outputDeviceId
+                            : outputDevices[0]?.deviceId ?? "";
+            
+                        setDevices({
+                            inputId,
+                            outputId,
+                            inputDevices,
+                            outputDevices
+                        });
         }
 
         bootstrap().catch((cause) => setError(cause instanceof Error ? cause.message : String(cause)));
@@ -170,11 +178,15 @@ export function App() {
     async function handleInputDeviceChange(deviceId: string) {
         setDevices((current) => ({ ...current, inputId: deviceId }));
         await clientRef.current?.setInputDevice(deviceId);
+        const prefs = loadPreferences();
+        savePreferences({ ...prefs, inputDeviceId: deviceId });
     }
 
     async function handleOutputDeviceChange(deviceId: string) {
         setDevices((current) => ({ ...current, outputId: deviceId }));
         await clientRef.current?.setOutputDevice(deviceId);
+        const prefs = loadPreferences();
+        savePreferences({ ...prefs, outputDeviceId: deviceId });
     }
 
     return (
