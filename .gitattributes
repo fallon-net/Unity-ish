@@ -1,0 +1,8 @@
+# Apply LF line endings consistently across Mac and Windows.
+* text=auto eol=lf
+
+# Binaries
+*.png binary
+*.jpg binary
+*.asset binary
+*.meta binary

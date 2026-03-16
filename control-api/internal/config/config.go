@@ -8,11 +8,12 @@ import (
 )
 
 type Config struct {
-	Port            string
-	JWTSigningKey   string
-	LiveKitAPIKey   string
+	Port             string
+	JWTSigningKey    string
+	LiveKitAPIKey    string
 	LiveKitAPISecret string
-	SQLitePath      string
+	LiveKitURL       string
+	SQLitePath       string
 }
 
 func Load() (Config, error) {
@@ -23,6 +24,7 @@ func Load() (Config, error) {
 		JWTSigningKey:    getOrDefault("JWT_SIGNING_KEY", "replace-me"),
 		LiveKitAPIKey:    getOrDefault("LIVEKIT_API_KEY", "devkey"),
 		LiveKitAPISecret: getOrDefault("LIVEKIT_API_SECRET", "devsecret"),
+		LiveKitURL:       getOrDefault("LIVEKIT_URL", "ws://localhost:7880"),
 		SQLitePath:       getOrDefault("SQLITE_PATH", "./data/unityish.db"),
 	}
 
