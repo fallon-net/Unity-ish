@@ -68,6 +68,29 @@ select {
     box-shadow: 0 12px 28px rgba(19, 33, 45, 0.08);
 }
 
+.health span {
+    font-size: 13px;
+    color: rgba(19, 33, 45, 0.6);
+}
+
+.health span.reconnect {
+    font-weight: 500;
+    color: #d68a16;
+    animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.6;
+    }
+}
+
 .health-good {
     border-left: 6px solid #2f8f5b;
 }

@@ -91,6 +91,19 @@ export function App() {
         };
     }, [connected, talkState]);
 
+    useEffect(() => {
+        if (!health.reconnectDelayMs) {
+            return;
+        }
+
+        // Update reconnect countdown every 100ms
+        const timer = setInterval(() => {
+            setHealth((current) => ({ ...current }));
+        }, 100);
+
+        return () => clearInterval(timer);
+    }, [health.reconnectDelayMs]);
+
     async function handleConnect() {
         if (!clientRef.current) {
             return;
@@ -176,6 +189,11 @@ export function App() {
                     <strong>{health.status.toUpperCase()}</strong>
                     <span>RTT {health.maxRttMs < 0 ? "-" : `${health.maxRttMs.toFixed(0)} ms`}</span>
                     <span>Loss {health.maxLossPercent < 0 ? "-" : `${health.maxLossPercent.toFixed(1)}%`}</span>
+                    {health.reconnectAttempt ? (
+                        <span className="reconnect">
+                            Reconnect #{health.reconnectAttempt} in {(health.reconnectDelayMs ?? 0 / 1000).toFixed(1)}s
+                        </span>
+                    ) : null}
                 </div>
             </section>
 

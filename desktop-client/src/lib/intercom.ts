@@ -26,6 +26,8 @@ export interface HealthSnapshot {
     status: "disconnected" | "good" | "warn" | "bad";
     maxRttMs: number;
     maxLossPercent: number;
+    reconnectAttempt?: number;
+    reconnectDelayMs?: number;
 }
 
 interface LoginResponse {
@@ -44,6 +46,15 @@ interface ChannelState {
     lastLossPercent: number;
 }
 
+interface ReconnectState {
+    attempt: number;
+    maxAttempts: number;
+    baseDelayMs: number;
+    maxDelayMs: number;
+    nextRetryAt?: number;
+    reconnectTimeoutId?: NodeJS.Timeout;
+}
+
 const channels: ChannelId[] = ["PL-A", "PL-B"];
 
 export class IntercomClient {
@@ -51,6 +62,13 @@ export class IntercomClient {
     private appToken = "";
     private readonly channelStates = new Map<ChannelId, ChannelState>();
     private onHealthChanged?: (health: HealthSnapshot) => void;
+    private reconnectState: ReconnectState = {
+        attempt: 0,
+        maxAttempts: 15,
+        baseDelayMs: 1000,
+        maxDelayMs: 60000
+    };
+    private lastConnectPayload?: { canTalk: ChannelId[] };
 
     constructor(config: ClientConfig, onHealthChanged?: (health: HealthSnapshot) => void) {
         this.config = config;
@@ -67,6 +85,20 @@ export class IntercomClient {
             throw new Error("login required before connect");
         }
 
+        this.lastConnectPayload = { canTalk };
+        this.reconnectState.attempt = 0;
+        this.clearReconnectTimer();
+
+        try {
+            await this.performConnect(canTalk);
+        } catch (error) {
+            console.error("Connection failed:", error);
+            this.scheduleReconnect();
+            this.emitHealth();
+        }
+    }
+
+    private async performConnect(canTalk: ChannelId[]): Promise<void> {
         const tokenResponse = await this.postJson<TokenResponse>(
             "/v1/token/livekit",
             { channels, canTalk },
@@ -104,12 +136,60 @@ export class IntercomClient {
     }
 
     disconnect(): void {
+        this.clearReconnectTimer();
+        this.lastConnectPayload = undefined;
         for (const state of this.channelStates.values()) {
             state.room.disconnect();
             state.audioElements.forEach((element) => element.remove());
         }
         this.channelStates.clear();
+        this.reconnectState.attempt = 0;
         this.emitHealth();
+    }
+
+    private clearReconnectTimer(): void {
+        if (this.reconnectState.reconnectTimeoutId) {
+            clearTimeout(this.reconnectState.reconnectTimeoutId);
+            this.reconnectState.reconnectTimeoutId = undefined;
+            this.reconnectState.nextRetryAt = undefined;
+        }
+    }
+
+    private scheduleReconnect(): void {
+        if (!this.lastConnectPayload) {
+            console.log("No connection payload; not scheduling reconnect");
+            return;
+        }
+
+        if (this.reconnectState.attempt >= this.reconnectState.maxAttempts) {
+            console.error("Max reconnection attempts reached");
+            return;
+        }
+
+        // Exponential backoff with jitter: delay = min(baseDelay * 2^attempt * random(0.5, 1.5), maxDelay)
+        const exponentialDelay = this.reconnectState.baseDelayMs * Math.pow(2, this.reconnectState.attempt);
+        const jitteredDelay = exponentialDelay * (0.5 + Math.random());
+        const delayMs = Math.min(jitteredDelay, this.reconnectState.maxDelayMs);
+
+        this.reconnectState.attempt++;
+        this.reconnectState.nextRetryAt = Date.now() + delayMs;
+
+        console.log(`Scheduling reconnect attempt ${this.reconnectState.attempt}/${this.reconnectState.maxAttempts} in ${delayMs.toFixed(0)}ms`);
+
+        this.reconnectState.reconnectTimeoutId = setTimeout(async () => {
+            console.log(`Attempting reconnect #${this.reconnectState.attempt}...`);
+            try {
+                const payload = this.lastConnectPayload!;
+                await this.performConnect(payload.canTalk);
+                this.reconnectState.attempt = 0;
+                console.log("Reconnection successful");
+            } catch (error) {
+                console.error("Reconnection failed:", error);
+                this.scheduleReconnect();
+            } finally {
+                this.emitHealth();
+            }
+        }, delayMs);
     }
 
     async setInputDevice(deviceId: string): Promise<void> {
@@ -199,6 +279,17 @@ export class IntercomClient {
         state.room.on(RoomEvent.Disconnected, () => {
             state.lastRttMs = 999;
             state.lastLossPercent = 100;
+
+            // Check if all rooms are disconnected
+            const allDisconnected = Array.from(this.channelStates.values()).every(
+                s => s.room.remoteParticipants.size === 0 && !s.audioElements.size
+            );
+
+            if (allDisconnected && this.lastConnectPayload) {
+                console.log("All channels disconnected; scheduling reconnect");
+                this.scheduleReconnect();
+            }
+
             this.emitHealth();
         });
     }
@@ -209,7 +300,12 @@ export class IntercomClient {
         }
 
         if (this.channelStates.size === 0) {
-            this.onHealthChanged({ status: "disconnected", maxRttMs: -1, maxLossPercent: -1 });
+            const snapshot: HealthSnapshot = { status: "disconnected", maxRttMs: -1, maxLossPercent: -1 };
+            if (this.reconnectState.nextRetryAt) {
+                snapshot.reconnectAttempt = this.reconnectState.attempt;
+                snapshot.reconnectDelayMs = Math.max(0, this.reconnectState.nextRetryAt - Date.now());
+            }
+            this.onHealthChanged(snapshot);
             return;
         }
 
@@ -227,7 +323,13 @@ export class IntercomClient {
             status = "warn";
         }
 
-        this.onHealthChanged({ status, maxRttMs, maxLossPercent });
+        const snapshot: HealthSnapshot = { status, maxRttMs, maxLossPercent };
+        if (this.reconnectState.nextRetryAt) {
+            snapshot.reconnectAttempt = this.reconnectState.attempt;
+            snapshot.reconnectDelayMs = Math.max(0, this.reconnectState.nextRetryAt - Date.now());
+        }
+
+        this.onHealthChanged(snapshot);
     }
 
     private roomOptions(): RoomOptions {
