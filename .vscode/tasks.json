@@ -1,0 +1,58 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "infra: up",
+            "type": "shell",
+            "command": "docker",
+            "args": [
+                "compose",
+                "up",
+                "-d"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/infra"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "infra: down",
+            "type": "shell",
+            "command": "docker",
+            "args": [
+                "compose",
+                "down"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/infra"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "control-api: run",
+            "type": "shell",
+            "command": "go",
+            "args": [
+                "run",
+                "./cmd/server"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/control-api"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "admin-web: dev",
+            "type": "shell",
+            "command": "npm",
+            "args": [
+                "run",
+                "dev"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/admin-web"
+            },
+            "problemMatcher": []
+        }
+    ]
+}

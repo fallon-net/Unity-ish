@@ -1,0 +1,25 @@
+{
+    "controlApiBaseUrl": "http://127.0.0.1:8080",
+    "livekitUrl": "ws://127.0.0.1:7880",
+    "defaultListen": {
+        "plA": true,
+        "plB": true
+    },
+    "ptt": {
+        "plA": "F1",
+        "plB": "F2"
+    },
+    "network": {
+        "reconnectBackoffSeconds": [
+            1,
+            2,
+            3,
+            5,
+            5
+        ],
+        "warnRttMs": 80,
+        "badRttMs": 150,
+        "warnLossPercent": 2,
+        "badLossPercent": 5
+    }
+}
