@@ -5,12 +5,13 @@
 - [x] Install required extensions.
 - [x] Compile the project.
 - [x] Create and run task definitions.
-- [ ] Launch the project.
+- [x] Launch the project.
 - [x] Ensure documentation is complete.
 
 Project notes:
-- Monorepo contains `control-api`, `infra`, `unity-client`, and `admin-web`.
+- Monorepo contains `control-api`, `infra`, `desktop-client`, `unity-client` (legacy), and `admin-web`.
 - Reliability and Windows support are first-class requirements.
-- Keep Unity client platform logic behind adapters.
+- Keep desktop client transport logic independent from the Unity game engine.
 - Keep control plane local-first with short-lived tokens and explicit health states.
-- Admin web compiles successfully; Go compile check is blocked until Go is installed and available on PATH.
+- Admin web compiles successfully; Go compile check now passes locally.
+- Desktop client typechecks, builds, and launches in dev mode locally.

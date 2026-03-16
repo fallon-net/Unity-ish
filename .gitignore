@@ -40,5 +40,9 @@ Packages/packages-lock.json
 admin-web/node_modules/
 admin-web/dist/
 
+# Desktop client
+desktop-client/node_modules/
+desktop-client/dist/
+
 # Infra data
 infra/data/

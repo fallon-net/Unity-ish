@@ -1,0 +1,8 @@
+{
+    "controlApiBaseUrl": "http://127.0.0.1:8080",
+    "livekitUrl": "ws://127.0.0.1:7880",
+    "defaultListen": {
+        "PL-A": true,
+        "PL-B": true
+    }
+}

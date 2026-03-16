@@ -1,28 +1,15 @@
-# Unity Client
+# Unity Client (Legacy)
 
-Unity app shell for Unity-ish intercom with macOS and Windows support from day 1.
+This folder is a legacy prototype that assumed the Unity game engine would host the operator client.
 
-## Goals
+That is no longer the primary direction.
 
-- Two party-lines (`PL-A`, `PL-B`)
-- Hold-to-talk per line
-- Listen toggles per line
-- Device selection and persistence
-- Reconnect and health state indicators
+## Current Status
 
-## Unity Version
+- The production client path is now `desktop-client`.
+- The intercom stack does not require the Unity engine for voice transport.
+- This folder remains only as a reference for earlier state-machine and party-line experiments.
 
-Use Unity 2022 LTS or newer.
+## Use Instead
 
-## Setup
-
-1. Open this folder as a Unity project in Unity Hub.
-2. Add a WebRTC/LiveKit Unity package.
-3. Wire transport calls into script stubs under `Assets/Scripts`.
-4. Set `config/client.sample.json` values in your runtime config path.
-
-## Cross-platform Notes
-
-- Keep platform-specific logic in adapters only.
-- Use shared interfaces for audio devices and PTT input.
-- Start with in-window hotkeys for reliability and permissions simplicity.
+Run the Electron desktop client in `desktop-client` for the active Mac-first and Windows-portable implementation.

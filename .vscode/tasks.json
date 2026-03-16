@@ -42,6 +42,19 @@
             "problemMatcher": []
         },
         {
+            "label": "desktop-client: dev",
+            "type": "shell",
+            "command": "npm",
+            "args": [
+                "run",
+                "dev"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/desktop-client"
+            },
+            "problemMatcher": []
+        },
+        {
             "label": "admin-web: dev",
             "type": "shell",
             "command": "npm",

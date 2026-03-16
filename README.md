@@ -4,15 +4,16 @@ Self-hosted, local-first intercom scaffold for live event production with two pa
 
 ## Architecture
 
-- `unity-client`: Cross-platform Unity app shell (macOS + Windows) with audio and input abstractions.
+- `desktop-client`: Electron + React operator client for macOS first, portable to Windows.
 - `control-api`: Go service for auth, token issuance, health checks, and config state.
 - `infra`: Docker Compose stack for LiveKit SFU + Redis.
 - `admin-web`: Lightweight operator/admin status UI.
+- `unity-client`: Legacy prototype folder kept temporarily for reference only.
 
 Text diagram:
 
-`Unity Client (Mac/Win) -> Control API (Go) -> LiveKit Token`
-`Unity Client (Mac/Win) <-> LiveKit SFU (WebRTC/Opus)`
+`Desktop Client (Mac/Win) -> Control API (Go) -> LiveKit Token`
+`Desktop Client (Mac/Win) <-> LiveKit SFU (WebRTC/Opus)`
 `Admin Web -> Control API`
 `Control API -> SQLite`
 
@@ -21,7 +22,6 @@ Text diagram:
 - Docker Desktop (Windows or macOS)
 - Go 1.22+
 - Node.js 20+
-- Unity Hub + Unity 2022 LTS or newer
 
 ## Quickstart
 
@@ -33,11 +33,14 @@ Text diagram:
    - `cd ../control-api`
    - `copy .env.example .env` (Windows) or `cp .env.example .env` (macOS)
    - `go run ./cmd/server`
-3. Start admin web:
+3. Start desktop client:
+   - `cd ../desktop-client`
+   - `npm install`
+   - `npm run dev`
+4. Optionally start admin web:
    - `cd ../admin-web`
    - `npm install`
    - `npm run dev`
-4. Open Unity project folder `unity-client` in Unity Hub and wire in a LiveKit Unity SDK package.
 
 ## Reliability Defaults
 
