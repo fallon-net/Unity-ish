@@ -1,87 +1,96 @@
-using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using UnityEngine;
+// LiveKit Unity SDK — resolves after UPM fetches the manifest entry.
+// Package entry: "io.livekit.unity": "https://github.com/livekit/client-sdk-unity.git?path=/Assets"
+using LiveKit;
 
 namespace UnityIsh.Audio
 {
     /// <summary>
-    /// LiveKit-backed transport implementation stub.
-    ///
-    /// SETUP:
-    ///   1. Add the LiveKit Unity SDK package to your project.
-    ///      https://github.com/livekit/client-sdk-unity
-    ///   2. Replace each TODO block below with the matching LiveKit SDK call.
-    ///   3. Keep all LiveKit types inside this class — nothing above this
-    ///      adapter should import LiveKit directly.
+    /// LiveKit-backed transport implementation.
+    /// One Room instance per party-line channel.
+    /// All LiveKit types stay inside this class — nothing above this adapter imports LiveKit directly.
+    /// WIRING: attach to the same GameObject as IntercomController.
     /// </summary>
     public sealed class LiveKitTransportService : MonoBehaviour, ITransportService
     {
-        // TODO: declare per-channel Room instances when LiveKit SDK is present.
-        // private readonly Dictionary<string, LiveKit.Room> _rooms = new();
-
+        private readonly Dictionary<string, Room> _rooms = new();
         private readonly Dictionary<string, ChannelState> _state = new();
 
         private sealed class ChannelState
         {
-            public bool IsConnected;
             public bool IsPublishing;
             public float LastRttMs = -1f;
             public float LastLossPercent = -1f;
         }
 
-        public async Task ConnectAsync(string channel, string livekitUrl, string token)
+        public async Task ConnectAsync(string channel, string livekitUrl, string roomToken)
         {
-            if (!_state.ContainsKey(channel))
+            if (_rooms.TryGetValue(channel, out var existing))
             {
-                _state[channel] = new ChannelState();
+                existing.Disconnect();
+                _rooms.Remove(channel);
+                _state.Remove(channel);
             }
 
-            // TODO: create and connect a LiveKit Room.
-            // var room = new LiveKit.Room();
-            // await room.ConnectAsync(livekitUrl, token, new RoomOptions { ... });
-            // room.TrackSubscribed += OnTrackSubscribed;
-            // room.Disconnected += (reason) => OnDisconnected(channel, reason);
-            // _rooms[channel] = room;
+            var room = new Room();
+            var state = new ChannelState();
 
-            _state[channel].IsConnected = true;
-            Debug.Log($"[LiveKitTransportService] Connected channel {channel} (stub)");
-            await Task.CompletedTask;
+            room.LocalParticipantConnectionQualityChanged += quality =>
+            {
+                (state.LastRttMs, state.LastLossPercent) = QualityToMetrics(quality);
+                Debug.Log($"[LiveKit:{channel}] Quality={quality} rtt~{state.LastRttMs}ms loss~{state.LastLossPercent}%");
+            };
+
+            room.Disconnected += () =>
+            {
+                Debug.LogWarning($"[LiveKit:{channel}] Room disconnected");
+                state.LastRttMs = 999f; // triggers ConnectedBad -> reconnect loop
+            };
+
+            _rooms[channel] = room;
+            _state[channel] = state;
+
+            await room.Connect(livekitUrl, roomToken,
+                new ConnectOptions { AutoSubscribe = true },
+                new RoomOptions { AudioEnabled = true });
+
+            Debug.Log($"[LiveKit:{channel}] Connected to room ({room.Name})");
         }
 
         public void Disconnect(string channel)
         {
-            // TODO: _rooms[channel]?.Disconnect();
-            if (_state.TryGetValue(channel, out var s))
+            if (_rooms.TryGetValue(channel, out var room))
             {
-                s.IsConnected = false;
-                s.IsPublishing = false;
+                room.Disconnect();
+                _rooms.Remove(channel);
             }
-            Debug.Log($"[LiveKitTransportService] Disconnected channel {channel}");
+            _state.Remove(channel);
+            Debug.Log($"[LiveKit:{channel}] Disconnected");
         }
 
         public void SetPublishing(string channel, bool publishing)
         {
-            if (!_state.TryGetValue(channel, out var s) || !s.IsConnected) return;
+            if (!_rooms.TryGetValue(channel, out var room)) return;
+            if (!_state.TryGetValue(channel, out var state)) return;
+            if (publishing == state.IsPublishing) return;
 
-            // TODO: get local audio track from _rooms[channel] and mute/unmute.
-            // var track = _rooms[channel].LocalParticipant.AudioTracks.FirstOrDefault();
-            // track?.SetMuted(!publishing);
-
-            s.IsPublishing = publishing;
-            Debug.Log($"[LiveKitTransportService] Channel {channel} publishing={publishing}");
+            state.IsPublishing = publishing;
+            room.LocalParticipant.SetMicrophoneEnabled(publishing);
+            Debug.Log($"[LiveKit:{channel}] Mic publishing={publishing}");
         }
 
         public void SetSubscribeAll(string channel, bool subscribe)
         {
-            if (!_state.TryGetValue(channel, out var s) || !s.IsConnected) return;
+            if (!_rooms.TryGetValue(channel, out var room)) return;
 
-            // TODO: iterate remote participants and set audio track subscription.
-            // foreach (var p in _rooms[channel].RemoteParticipants.Values)
-            //     foreach (var t in p.AudioTracks.Values)
-            //         t.SetSubscribed(subscribe);
+            foreach (var participant in room.RemoteParticipants.Values)
+                foreach (var pub in participant.TrackPublications.Values)
+                    if (pub.Kind == TrackKind.Audio)
+                        pub.SetSubscribed(subscribe);
 
-            Debug.Log($"[LiveKitTransportService] Channel {channel} subscribe={subscribe}");
+            Debug.Log($"[LiveKit:{channel}] Remote audio subscribe={subscribe}");
         }
 
         public float GetLastRttMs(string channel)
@@ -90,7 +99,14 @@ namespace UnityIsh.Audio
         public float GetLastPacketLossPercent(string channel)
             => _state.TryGetValue(channel, out var s) ? s.LastLossPercent : -1f;
 
-        // TODO: subscribe to LiveKit Room stats events and update _state[channel].LastRttMs
-        // and _state[channel].LastLossPercent from RtcStats.
+        // Translate LiveKit ConnectionQuality -> approximate metrics for health thresholds.
+        private static (float rttMs, float lossPercent) QualityToMetrics(ConnectionQuality q)
+            => q switch
+            {
+                ConnectionQuality.Excellent => (40f, 0f),
+                ConnectionQuality.Good => (100f, 1.5f),
+                ConnectionQuality.Poor => (200f, 8f),
+                _ => (-1f, -1f)
+            };
     }
 }

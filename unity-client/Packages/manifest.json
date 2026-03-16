@@ -1,0 +1,6 @@
+{
+    "dependencies": {
+        "io.livekit.unity": "https://github.com/livekit/client-sdk-unity.git?path=/Assets",
+        "com.unity.nuget.newtonsoft-json": "3.2.1"
+    }
+}

@@ -3,7 +3,7 @@
 - [x] Scaffold the project.
 - [x] Customize the project.
 - [x] Install required extensions.
-- [ ] Compile the project.
+- [x] Compile the project.
 - [x] Create and run task definitions.
 - [ ] Launch the project.
 - [x] Ensure documentation is complete.

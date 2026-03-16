@@ -7,6 +7,8 @@ using UnityEngine;
 using UnityEngine.Networking;
 using UnityIsh.Audio;
 using UnityIsh.Core.State;
+using Newtonsoft.Json;
+using UnityIsh.UI;
 
 namespace UnityIsh.Core
 {
@@ -34,6 +36,7 @@ namespace UnityIsh.Core
         [SerializeField] private MonoBehaviour audioDeviceServiceRef;
         [SerializeField] private MonoBehaviour pttInputServiceRef;
         [SerializeField] private ReconnectService reconnectService;
+        [SerializeField] private LoginPanel loginPanel;
 
         [Header("Config Path (relative to persistentDataPath)")]
         [SerializeField] private string configFileName = "client.json";
@@ -115,28 +118,41 @@ namespace UnityIsh.Core
 
         private void LoadConfig()
         {
-            // TODO: read client.json via UnityEngine.Application.persistentDataPath
-            // and parse into a config struct. Using defaults for now.
+            var path = System.IO.Path.Combine(Application.persistentDataPath, configFileName);
+            if (System.IO.File.Exists(path))
+            {
+                try
+                {
+                    var cfg = JsonConvert.DeserializeObject<ClientConfig>(System.IO.File.ReadAllText(path));
+                    _controlApiBase = cfg?.ControlApiBaseUrl ?? "http://127.0.0.1:8080";
+                    _livekitUrl = cfg?.LivekitUrl ?? "ws://127.0.0.1:7880";
+                    Debug.Log($"[IntercomController] Config loaded from {path}");
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning($"[IntercomController] Config parse failed, using defaults: {ex.Message}");
+                }
+            }
             _controlApiBase = "http://127.0.0.1:8080";
             _livekitUrl = "ws://127.0.0.1:7880";
-            Debug.Log("[IntercomController] Config loaded (defaults)");
+            Debug.Log("[IntercomController] No config file found, using defaults");
         }
 
         /// <summary>POST /v1/auth/login and store the resulting app token.</summary>
         private async Task LoginAsync()
         {
-            // TODO: replace player_prefs lookup with a proper login UI.
-            const string username = "ops";
-            const string password = "changeme";
-
-            var body = $"{{\"username\":\"{username}\",\"password\":\"{password}\"}}";
+            var (username, password) = await WaitForLoginAsync();
+            var body = $"{{\"username\":\"{EscapeJson(username)}\",\"password\":\"{EscapeJson(password)}\"}}";
             var result = await PostJsonAsync($"{_controlApiBase}/v1/auth/login", body);
-            var parsed = JsonUtility.FromJson<LoginResponse>(result);
-
-            if (string.IsNullOrEmpty(parsed.accessToken))
+            var parsed = JsonConvert.DeserializeObject<LoginResponse>(result);
+            if (parsed == null || string.IsNullOrEmpty(parsed.AccessToken))
+            {
+                loginPanel?.ShowError("Login failed. Check credentials.");
                 throw new Exception("login failed: empty token");
-
-            _appToken = parsed.accessToken;
+            }
+            loginPanel?.Hide();
+            _appToken = parsed.AccessToken;
             Debug.Log("[IntercomController] Login successful");
         }
 
@@ -145,14 +161,16 @@ namespace UnityIsh.Core
         {
             var body = $"{{\"channels\":[\"PL-A\",\"PL-B\"],\"canTalk\":[\"PL-A\",\"PL-B\"]}}";
             var result = await PostJsonAsync($"{_controlApiBase}/v1/token/livekit", body, _appToken);
-            var parsed = JsonUtility.FromJson<TokenResponse>(result);
+            var parsed = JsonConvert.DeserializeObject<TokenResponse>(result);
+            if (parsed?.Tokens == null)
+                throw new Exception("token response missing");
 
-            // Register and connect each channel.
             foreach (var ch in Channels)
             {
                 _partyLines.Register(ch, ch, canTalk: true);
-                var roomToken = GetTokenForChannel(parsed, ch);
-                await _transport.ConnectAsync(ch, parsed.livekitUrl, roomToken);
+                if (!parsed.Tokens.TryGetValue(ch, out var roomToken))
+                    throw new Exception($"no token for channel {ch}");
+                await _transport.ConnectAsync(ch, parsed.LivekitUrl, roomToken);
             }
 
             Debug.Log("[IntercomController] Both channels connected");
@@ -211,7 +229,27 @@ namespace UnityIsh.Core
             // TODO: update UI status badge.
         }
 
-        // ---- HTTP Helpers (UnityWebRequest) ---------------------------------
+        // ---- Login UI helper ------------------------------------------------
+
+        private TaskCompletionSource<(string, string)> _loginTcs;
+
+        private Task<(string, string)> WaitForLoginAsync()
+        {
+            _loginTcs = new TaskCompletionSource<(string, string)>();
+            if (loginPanel != null)
+            {
+                loginPanel.Show();
+                loginPanel.OnLoginSubmit += (u, p) => _loginTcs.TrySetResult((u, p));
+            }
+            else
+            {
+                // Headless fallback — check env / default.
+                _loginTcs.SetResult(("ops", "changeme"));
+            }
+            return _loginTcs.Task;
+        }
+
+        // ---- HTTP Helpers ---------------------------------------------------
 
         private static async Task<string> PostJsonAsync(string url, string json, string bearerToken = null)
         {
@@ -233,24 +271,26 @@ namespace UnityIsh.Core
             return req.downloadHandler.text;
         }
 
-        // ---- JSON shims (avoid JSON.NET dependency for this stub) -----------
+        private static string EscapeJson(string s)
+            => s.Replace("\\", "\\\\").Replace("\"", "\\\"");
 
-        [Serializable] private class LoginResponse { public string accessToken; }
+        // ---- JSON models ----------------------------------------------------
 
-        [Serializable]
-        private class TokenResponse
+        private sealed class ClientConfig
         {
-            public string livekitUrl;
-            // Unity's JsonUtility doesn't support Dictionary; parse with a known key count.
-            public string tokenPLA;
-            public string tokenPLB;
+            [JsonProperty("controlApiBaseUrl")] public string ControlApiBaseUrl;
+            [JsonProperty("livekitUrl")] public string LivekitUrl;
         }
 
-        private static string GetTokenForChannel(TokenResponse r, string ch) => ch switch
+        private sealed class LoginResponse
         {
-            "PL-A" => r.tokenPLA,
-            "PL-B" => r.tokenPLB,
-            _ => throw new ArgumentException($"Unknown channel {ch}")
-        };
+            [JsonProperty("accessToken")] public string AccessToken;
+        }
+
+        private sealed class TokenResponse
+        {
+            [JsonProperty("livekitUrl")] public string LivekitUrl;
+            [JsonProperty("tokens")] public Dictionary<string, string> Tokens;
+        }
     }
 }
